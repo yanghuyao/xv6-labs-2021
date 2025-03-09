@@ -120,12 +120,21 @@ found:
   p->pid = allocpid();
   p->state = USED;
 
+  //这里给trapframe分配空间
   // Allocate a trapframe page.
   if((p->trapframe = (struct trapframe *)kalloc()) == 0){
     freeproc(p);
     release(&p->lock);
     return 0;
   }
+  //在这里给USYSCALL分配空间，参考分配trapframe的代码
+  if((p->usyspage = (struct usyscall *)kalloc()) == 0){
+    freeproc(p);
+    release(&p->lock);
+    return 0;
+  }
+  //将pid放入此空间中
+  p->usyspage->pid=p->pid;
 
   // An empty user page table.
   p->pagetable = proc_pagetable(p);
@@ -153,6 +162,11 @@ freeproc(struct proc *p)
   if(p->trapframe)
     kfree((void*)p->trapframe);
   p->trapframe = 0;
+  //做好空间释放
+  if(p->usyspage)
+    kfree((void*)p->usyspage);
+  p->usyspage = 0;
+  
   if(p->pagetable)
     proc_freepagetable(p->pagetable, p->sz);
   p->pagetable = 0;
@@ -187,7 +201,16 @@ proc_pagetable(struct proc *p)
     uvmfree(pagetable, 0);
     return 0;
   }
-
+  //在这里进行USYSCALL映射；在此之前需要先分配空间，然后将pid放入
+  //这里要求只读页，因此把权限设成PTE_R，另外还要加上PTE_U，xv6手册里表明，
+  //不加PTE_U的页默认在supervisor mode里运行：
+  if(mappages(pagetable, USYSCALL, PGSIZE,
+        (uint64)p->usyspage, PTE_R | PTE_U) < 0){
+    uvmunmap(pagetable, TRAMPOLINE, 1, 0);
+    uvmunmap(pagetable, TRAPFRAME, 1, 0);
+    uvmfree(pagetable, 0);
+    return 0;
+    }
   // map the trapframe just below TRAMPOLINE, for trampoline.S.
   if(mappages(pagetable, TRAPFRAME, PGSIZE,
               (uint64)(p->trapframe), PTE_R | PTE_W) < 0){
@@ -206,6 +229,7 @@ proc_freepagetable(pagetable_t pagetable, uint64 sz)
 {
   uvmunmap(pagetable, TRAMPOLINE, 1, 0);
   uvmunmap(pagetable, TRAPFRAME, 1, 0);
+  uvmunmap(pagetable, USYSCALL, 1, 0);
   uvmfree(pagetable, sz);
 }
 
