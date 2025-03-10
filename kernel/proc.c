@@ -201,6 +201,13 @@ proc_pagetable(struct proc *p)
     uvmfree(pagetable, 0);
     return 0;
   }
+  // map the trapframe just below TRAMPOLINE, for trampoline.S.
+  if(mappages(pagetable, TRAPFRAME, PGSIZE,
+              (uint64)(p->trapframe), PTE_R | PTE_W) < 0){
+    uvmunmap(pagetable, TRAMPOLINE, 1, 0);
+    uvmfree(pagetable, 0);
+    return 0;
+  }
   //在这里进行USYSCALL映射；在此之前需要先分配空间，然后将pid放入
   //这里要求只读页，因此把权限设成PTE_R，另外还要加上PTE_U，xv6手册里表明，
   //不加PTE_U的页默认在supervisor mode里运行：
@@ -211,14 +218,7 @@ proc_pagetable(struct proc *p)
     uvmfree(pagetable, 0);
     return 0;
     }
-  // map the trapframe just below TRAMPOLINE, for trampoline.S.
-  if(mappages(pagetable, TRAPFRAME, PGSIZE,
-              (uint64)(p->trapframe), PTE_R | PTE_W) < 0){
-    uvmunmap(pagetable, TRAMPOLINE, 1, 0);
-    uvmfree(pagetable, 0);
-    return 0;
-  }
-
+  
   return pagetable;
 }
 
