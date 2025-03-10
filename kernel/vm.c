@@ -432,3 +432,27 @@ copyinstr(pagetable_t pagetable, char *dst, uint64 srcva, uint64 max)
     return -1;
   }
 }
+
+void printwalk(pagetable_t pagetable, uint level) {
+  char* prefix;
+  if (level == 2) prefix = "..";                        //一级
+  else if (level == 1) prefix = ".. ..";                //二级
+  else prefix = ".. .. ..";                             //三级
+
+  for(int i = 0; i < 512; i++){
+    pte_t pte = pagetable[i];                             //获取pte
+    if(pte & PTE_V){                                      //判断有效性
+      uint64 pa = PTE2PA(pte);                            //获取物理地址
+      printf("%s%d: pte %p pa %p\n", prefix, i, pte, pa); //格式化输出
+      if((pte & (PTE_R|PTE_W|PTE_X)) == 0){               //判断是否还有下一级页表
+        printwalk((pagetable_t)pa, level - 1);            //有下一级页表就递归调用
+      }
+    }
+  }
+}
+
+void
+vmprint(pagetable_t pagetable) {
+  printf("page table %p\n", pagetable);
+  printwalk(pagetable, 2);
+}
