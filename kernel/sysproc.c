@@ -81,6 +81,34 @@ int
 sys_pgaccess(void)
 {
   // lab pgtbl: your code here.
+  uint64 base,user_addr;
+  int len;
+  if(argaddr(0,&base)<0||argint(1,&len)<0||argaddr(2,&user_addr)<0)   // 获取传入的参数
+  {
+    printf("sys_pgaccess: error argument\n");
+    return -1;
+  }
+  if(len>64)                        // 设置页面上限
+  {
+    printf("sys_pgaccess: len %d can not more than 64\n",len);
+    return -1;
+  }
+  uint64 bitmask=0;                 // 定义返回的mask
+  int count=0;                      // 记录这是访问的第几个页面
+  struct proc *p=myproc();          // 获取proc
+  for(uint64 cur_page=base;(cur_page<base+len*PGSIZE);cur_page+=PGSIZE,count++) // 遍历页面               
+  {
+    pte_t *pte=walk(p->pagetable,cur_page,0);                         // 获取pte
+    if(*pte&PTE_A)                  // 检测是否被访问过
+    {
+      bitmask|=(1L << count);
+      (*pte)&=(~PTE_A);       // 还原PTE_A位
+    }else
+    {
+      // do nothing
+    }
+  }
+  copyout(p->pagetable,user_addr,(char *)&bitmask,sizeof(bitmask));  // 要注意(char *)&bitmask中间有&，否则报错
   return 0;
 }
 #endif
